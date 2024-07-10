@@ -1,4 +1,6 @@
 
+#include <Arduino.h>
+#include "driver/gpio.h"
 #include <WiFi.h>
 // #include <AsyncTCP.h>
 #include <ESPAsyncWebServer.h>
@@ -15,8 +17,13 @@ unsigned long previousMillis = 0;
 unsigned long lastScreenUpdateMillis = 0;
 int updateInterval = 500;
 
-const char *ssid = "Wave_Rover";
-const char *password = "12345678";
+//Access-point SSID
+const char *ssid = "SlowCar";
+const char *password = "87654321";
+
+//Connect to home network
+// const char *ssid = "Replace_with_your_SSID";
+// const char *password = "Replace_with_your_password";
 
 String message = "";
 
@@ -27,12 +34,14 @@ AsyncWebServer server(80);
 // AsyncEventSource events("/events");
 AsyncWebSocket ws("/ws");
 
+IPAddress IP;
+
 // Json Variable to Hold Sensor Readings
 JSONVar readings;
 
 // <<<<<<<<<<=== === ===SSD1306: 0x3C=== === ===>>>>>>>>>>
 // 0.91inch OLED
-bool screenDefaultMode = true;
+bool screenDefaultMode = false;
 String wifiSSID;
 String wifiIP;
 String screenLine_0;
@@ -54,9 +63,12 @@ const int ledChannel2 = 4;
 const int resolution = 8;
 
 DifferentialSteering DiffSteer;
-int fPivYLimit = 20;
+int fPivYLimit = 100;
 int idle = 0;
+#include <Wire.h>
 
+#define S_SCL 33
+#define S_SDA 32
 #include <Adafruit_SSD1306.h>
 #define SCREEN_WIDTH 128     // OLED display width, in pixels
 #define SCREEN_HEIGHT 32     // OLED display height, in pixels
@@ -74,12 +86,16 @@ void InitScreen() {
 
 // Initialize WiFi
 void initWiFi() {
-  // WiFi.mode(WIFI_AP);
+  //**for home network connection
+   //WiFi.mode(WIFI_STA);
   // WiFi.begin(ssid, password);
+
+  //**for stand-alone wifi
   WiFi.softAP(ssid, password);
+  IP = WiFi.softAPIP();
+
   Serial.print("Connecting to WiFi ");
   Serial.println(ssid);
-  IPAddress IP = WiFi.softAPIP();
   Serial.print("AP IP address: ");
   Serial.println(IP);
 }
@@ -108,19 +124,38 @@ void pinInit() {
 }
 
 void motorDrive(int speed, int channel, int motorPin1, int motorPin2) {
-  if (speed > 5) {
-    digitalWrite(motorPin1, HIGH);
-    digitalWrite(motorPin2, LOW);
-    ledcWrite(channel, abs(speed));
-  } else if (speed < -5) {
-    digitalWrite(motorPin1, LOW);
-    digitalWrite(motorPin2, HIGH);
-    ledcWrite(channel, abs(speed));
-  } else {
+  if (speed == 0) {
+    Serial.println("zero");
     speed = 0;
     digitalWrite(motorPin1, HIGH);
     digitalWrite(motorPin2, HIGH);
     ledcWrite(channel, 0);
+  } else if (speed > 10) {
+    digitalWrite(motorPin1, HIGH);
+    digitalWrite(motorPin2, LOW);
+    ledcWrite(channel, abs(speed));
+    Serial.print(motorPin1);
+    Serial.print(motorPin2);
+    Serial.print("pin1: ");
+    Serial.print(digitalRead(motorPin1), DEC);
+    Serial.print(" pin2: ");
+    Serial.print(digitalRead(motorPin2), DEC);
+    Serial.print("forword: ");
+    Serial.println(ledcRead(channel));
+  } else if (speed < -10) {
+    digitalWrite(motorPin1, LOW);
+    digitalWrite(motorPin2, HIGH);
+    ledcWrite(channel, abs(speed));
+    Serial.print(motorPin1);
+    Serial.print(motorPin2);
+    Serial.print("pin1: ");
+    Serial.print(digitalRead(motorPin1), DEC);
+    Serial.print(" pin2: ");
+    Serial.print(digitalRead(motorPin2), DEC);
+    Serial.print(" reverse: ");
+    Serial.println(ledcRead(channel));
+  } else {
+    Serial.println("JK");
   }
 }
 
@@ -192,6 +227,7 @@ void onEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType 
 
 void setup() {
   Serial.begin(115200);
+  Wire.begin(S_SDA, S_SCL);
   InitScreen();
   initWiFi();
   pinInit();
@@ -226,19 +262,20 @@ void loop() {
 
   // auto client = WSserver.accept();
   // client.onMessage(handle_message);
-  // while (client.available()) {
-    currentMillis = millis();
-    ws.cleanupClients();
-    if (currentMillis - previousMillis > updateInterval) {
-      previousMillis = currentMillis;
-       //InaDataUpdate();
-      // events.send("ping", NULL, millis());
-      // events.send(String(loadVoltage_V).c_str(), "voltage", millis());
-
-      // getWifiStatus();
-      // allDataUpdate();
-      //notifyClients(getSensorReadings());
-    }
-    // client.poll();
-  // }
+  // while (client.available()) {All
+  currentMillis = millis();
+  ws.cleanupClients();
+  if (currentMillis - previousMillis > updateInterval) {
+    display.clearDisplay();
+    display.setTextSize(1);
+    display.setTextColor(SSD1306_WHITE);
+    display.setCursor(0, 0);
+    display.print(F("SSID: "));
+    display.print(ssid);
+    display.setCursor(0, 8);
+    display.print(F("IP: "));
+    display.print(IP);
+    display.display();
+    previousMillis = currentMillis;
+  }
 }
